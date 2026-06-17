@@ -1,6 +1,6 @@
 {
   "name": "pullsmith",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Run AI agents in your CI/CD pipeline with a single YAML file.",
   "homepage": "https://pullsmith.dev",
   "bugs": {
