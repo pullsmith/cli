@@ -6,8 +6,12 @@ const credentialsPath = join(homedir(), ".pullsmith", "credentials");
 
 // Saves generated token from Pullsmith.dev in local machine ./pullsmith/credentials
 export function saveToken(token) {
-  mkdirSync(join(homedir(), ".pullsmith"), { recursive: true });
-  writeFileSync(credentialsPath, JSON.stringify({ token }), "utf8");
+    try {
+      mkdirSync(join(homedir(), ".pullsmith"), { recursive: true });
+      writeFileSync(credentialsPath, JSON.stringify({ token }), "utf8");
+    } catch (err) {
+        throw new Error("☹️ Failed to save local credentials in .pullsmith file.");
+    }
 }
 
 // Reads the token so the CLI can make authenticated requests to Pullsmith's API

@@ -1,0 +1,69 @@
+name: Pullsmith
+on:
+  workflow_dispatch:
+    inputs:
+        error:
+            description: "Sentry error title"
+            required: false
+            default: "Sentry error"
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Claude Code
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.__SECRET_NAME__ }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ID=$(gh api "/users/pullsmith-dev[bot]" --jq .id)
+          git config user.email "${ID}+pullsmith-dev[bot]@users.noreply.github.com"
+          git config user.name "pullsmith-dev[bot]"
+          ERROR="${{ github.event.inputs.error }}"
+          SLUG=$(echo "$ERROR" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g; s/--*/-/g; s/^-//; s/-$//' | cut -c1-50)
+          BRANCH="pullsmith/fix-$SLUG"
+          AGENT=$(awk -F': *' '/^sentry_agent:/{print $2; exit}' .pullsmith)
+          PROMPT=$(awk -v a="$AGENT" '
+            /^[[:space:]]*-?[[:space:]]*name:[[:space:]]*/ {
+              name=$0; sub(/^[[:space:]]*-?[[:space:]]*name:[[:space:]]*/,"",name)
+              here=(name==a); inp=0; next
+            }
+            here && /prompt:[[:space:]]*|/ { inp=1; ind=-1; next }
+            inp {
+              if ($0 ~ /^[[:space:]]*$/) { print ""; next }
+              n=match($0,/[^[:space:]]/)-1
+              if (ind<0) ind=n
+              if (n<ind) { inp=0; next }
+              print substr($0, ind+1)
+            }
+          ' .pullsmith)
+          MODEL=$(awk -v a="$AGENT" '
+            /^[[:space:]]*-?[[:space:]]*name:[[:space:]]*/ {
+              name=$0; sub(/^[[:space:]]*-?[[:space:]]*name:[[:space:]]*/,"",name)
+              here=(name==a); next
+            }
+            here && /^[[:space:]]*model:[[:space:]]*/ {
+              m=$0; sub(/^[[:space:]]*model:[[:space:]]*/,"",m)
+              sub(/[[:space:]]*(#.*)?$/,"",m)   # strip trailing spaces/comments
+              print m; exit
+            }
+          ' .pullsmith)
+
+
+          git checkout -b "$BRANCH"
+          npx @anthropic-ai/claude-code -p --model "$MODEL" --dangerously-skip-permissions "$PROMPT. You are fixing this Sentry error: $ERROR. ONLY edit the code in the working tree to fix it. Do NOT run git, do NOT commit, do NOT push, and do NOT open a pull request - the surrounding workflow handles all of that."
+
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes produced; nothing to do."
+            exit 0;
+          fi
+
+          git commit -m "fix: $ERROR"
+          git push origin "$BRANCH"
+          gh pr create --title "$ERROR" --body "Automated fix by Pullsmith for Sentry error: $ERROR" --base "${{ github.ref_name }}" --head "$BRANCH"

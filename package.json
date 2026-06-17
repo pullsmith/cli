@@ -1,7 +1,11 @@
 {
   "name": "pullsmith",
   "version": "0.0.1",
-  "description": "Trigger PRs from your Sentry errors",
+  "description": "Run AI agents in your CI/CD pipeline with a single YAML file.",
+  "homepage": "https://pullsmith.dev",
+  "bugs": {
+    "url": "https://github.com/pullsmith/cli/issues"
+  },
   "bin": {
     "pullsmith": "./bin/pullsmith.js"
   },

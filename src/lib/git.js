@@ -1,10 +1,10 @@
 import { execSync } from "child_process";
 
-export function getRemoteUrl(){
+export function getRepoRemoteUrl(){
     try {
-        return execSync("git remote get-url origin").toString().trim();
+        return execSync("git remote get-url origin", { stdio: "pipe" }).toString().trim();
     } catch (err) {
-        throw new Error("Unable to get remote git url");
+        throw new Error("☹️ Looks like you're not inside a Git repo. cd into your project, then try again.");
     } 
 }
 

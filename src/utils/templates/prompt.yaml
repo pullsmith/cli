@@ -1,0 +1,8 @@
+sentry_agent: sentry_error_fixer
+
+agents:
+  - name: sentry_error_fixer
+    prompt: |
+      On a scale from 1 to 10, how beautiful is my code? Respond with only numbers 1 to 10.
+    model: claude-haiku-4-5 
+    provider: claude
