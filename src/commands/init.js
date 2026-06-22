@@ -100,11 +100,47 @@ function deleteWorkflowFile() {
     }
 }
 
-// We only get this token if Github auth is successful
+// We only get this token if Github auth is successful.
+//
+// The browser visits this local server twice:
+//   1. /callback?token=... — GitHub auth done. We verify the Claude secret, write the
+//      workflow file, then hand the browser off to the Sentry connect flow (302).
+//   2. /sentry-done        — Sentry connect finished and /api/sentry/setup bounced the
+//      browser back here, so the terminal can confirm and exit.
 function waitForNextJsInternalToken(repoUrl) {
     return new Promise((resolve, reject) => {
+        let settled = false;
+
+        const finish = (fn, arg) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeout);
+            server.close();
+            fn(arg);
+        };
+
         const server = http.createServer(async (req, res) => {
             const url = new URL(req.url, `http://localhost:${PORT}`);
+
+            // Step 2: Sentry connect bounced back.
+            if (url.pathname === "/sentry-done") {
+                const error = url.searchParams.get("error");
+
+                res.writeHead(200, { "Content-Type": "text/html" });
+                res.end("<!doctype html><meta charset=\"utf-8\"><p>Sentry connected! You can close this tab and return to your terminal.</p>");
+
+                if (error) {
+                    console.warn(`⚠️  Sentry connect did not complete (${error}). Core setup is done; you can connect Sentry later.`);
+                } else {
+                    console.log("✅ Sentry connected!");
+                }
+
+                console.log("Authenticated successfully!");
+                finish(resolve);
+                return;
+            }
+
+            // Step 1: GitHub auth callback carrying the internal token.
             const internalNextJSToken = url.searchParams.get("token");
 
             if (internalNextJSToken) {
@@ -116,22 +152,38 @@ function waitForNextJsInternalToken(repoUrl) {
                     const secretName = await checkThatClaudeAPIKeyIsInSecrets(internalNextJSToken, repoUrl);
                     createGithubWorkflowFile(secretName);
 
-                    res.writeHead(200);
-                    res.end("Authentication successful! You can close this tab.");
-                    server.close();
-                    console.log("Authenticated successfully!");
-                    resolve();
+                    // Hand the browser off to the Sentry connect flow. Keep the server
+                    // open; it resolves when Sentry bounces back to /sentry-done.
+                    console.log("Opening Sentry to connect your account...");
+                    res.writeHead(302, {
+                        Location: `${PULLSMITH_BASE_URL}/api/sentry/install?token=${internalNextJSToken}`,
+                    });
+                    res.end();
                 } catch (err) {
-                    reject(err);
+                    res.writeHead(500);
+                    res.end(err.message);
+                    finish(reject, err);
                 }
+
+                return;
             }
+
+            res.writeHead(404);
+            res.end();
         });
+
+        // Don't hang forever if the user abandons the Sentry step — core setup
+        // (GitHub auth, Claude check, workflow file) already succeeded by then.
+        const timeout = setTimeout(() => {
+            console.warn("⚠️  Timed out waiting for Sentry connection. Core setup is done; you can connect Sentry later.");
+            finish(resolve);
+        }, 5 * 60 * 1000);
 
         server.listen(PORT, () => {
             console.log(`Waiting for authentication on port ${PORT}...`);
         });
 
-        server.on("error", reject);
+        server.on("error", (err) => finish(reject, err));
     });
 }
 
