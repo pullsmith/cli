@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run Claude Code
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.__SECRET_NAME__ }}
+          __CLAUDE_AUTH_ENV_NAME__: ${{ secrets.__SECRET_NAME__ }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ID=$(gh api "/users/pullsmith-dev[bot]" --jq .id)
