@@ -1,4 +1,5 @@
 import http from "http";
+import { randomUUID } from "crypto";
 import { exec, spawn } from "child_process";
 import { createInterface } from "readline/promises";
 import { stdin as input, stdout as output } from "process";
@@ -33,7 +34,8 @@ export async function init() {
         process.exit(1);
     }
 
-    const connectUrl = `${PULLSMITH_BASE_URL}/connect?repo=${encodeURIComponent(repoUrl)}`;
+    const flowId = randomUUID();
+    const connectUrl = `${PULLSMITH_BASE_URL}/connect?repo=${encodeURIComponent(repoUrl)}&flowId=${encodeURIComponent(flowId)}`;
 
     console.log("Opening browser to authenticate...");
 
@@ -131,6 +133,7 @@ function deleteWorkflowFile() {
 function waitForNextJsInternalToken(repoUrl, authMode) {
     return new Promise((resolve, reject) => {
         let settled = false;
+        let githubCallbackHandled = false;
 
         const finish = (fn, arg) => {
             if (settled) return;
@@ -168,6 +171,13 @@ function waitForNextJsInternalToken(repoUrl, authMode) {
             const internalNextJSToken = url.searchParams.get("token");
 
             if (internalNextJSToken) {
+                if (githubCallbackHandled) {
+                    res.writeHead(200, { "Content-Type": "text/html" });
+                    res.end("<!doctype html><meta charset=\"utf-8\"><p>Setup is already in progress. You can close this tab and return to your terminal.</p>");
+                    return;
+                }
+
+                githubCallbackHandled = true;
                 saveTokenLocally(internalNextJSToken);
                 deleteWorkflowFile();
                 createPullsmithFile();
