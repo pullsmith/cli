@@ -26,6 +26,7 @@ export async function init() {
     try {
         repoUrl = getRepoRemoteUrl();
         authMode = await askClaudeAuthMode();
+        await askBugReportingIntegration();
         await prepareClaudeAuth(authMode, repoUrl);
     } catch (err) {
         console.error(err.message);
@@ -145,12 +146,15 @@ function waitForNextJsInternalToken(repoUrl, authMode) {
             // Step 2: Sentry connect bounced back.
             if (url.pathname === "/sentry-done") {
                 const error = url.searchParams.get("error");
+                const already = url.searchParams.get("already");
 
                 res.writeHead(200, { "Content-Type": "text/html" });
                 res.end("<!doctype html><meta charset=\"utf-8\"><p>Sentry connected! You can close this tab and return to your terminal.</p>");
 
                 if (error) {
                     console.warn(`⚠️  Sentry connect did not complete (${error}). Core setup is done; you can connect Sentry later.`);
+                } else if (already) {
+                    console.log("✅ Sentry already connected for this repo.");
                 } else {
                     console.log("✅ Sentry connected!");
                 }
@@ -226,6 +230,25 @@ Choose 1 or 2: `);
         }
 
         console.log("Please choose 1 or 2.");
+    }
+}
+
+// Sentry is the only bug reporting integration for now. We still ask so the
+// choice is explicit and the prompt is ready for more integrations later.
+async function askBugReportingIntegration() {
+    while (true) {
+        const answer = await ask(`Which bug reporting integration do you want to use?
+  1. Sentry
+
+Choose 1: `);
+
+        const normalized = answer.trim().toLowerCase();
+
+        if (["1", "sentry"].includes(normalized)) {
+            return "sentry";
+        }
+
+        console.log("Please choose 1.");
     }
 }
 
